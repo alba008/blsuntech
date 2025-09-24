@@ -1,13 +1,36 @@
 /* src/index.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Optional global polish */
-html, body, #root { height: 100%; }
+/* --- Global sizing & anti-horizontal-drift --- */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;            /* <- stop any sideways scroll */
+}
+
 body {
   @apply bg-black text-white antialiased;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-x: none;   /* <- prevent iOS bounce causing x-shift */
+  touch-action: pan-y;           /* <- avoids accidental horizontal pans */
 }
+
+/* Reset common overflow offenders */
+img, svg, video, canvas, iframe {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+table { width: 100%; border-collapse: collapse; }
+pre, code { word-wrap: break-word; white-space: pre-wrap; }
+* { box-sizing: border-box; }
+
+/* Optional utility: apply to any section with fancy absolute backgrounds */
+.no-x-overflow { overflow-x: hidden; contain: paint; }
 
 /* Nice container width helper */
 .container-safe { @apply max-w-7xl mx-auto px-6 sm:px-8; }
@@ -20,3 +43,13 @@ body {
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 9999px; }
 *::-webkit-scrollbar-track { background: transparent; }
+
+/* Prefer-reduced-motion support (keeps subtle zoom but avoids jank) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

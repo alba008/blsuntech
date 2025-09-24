@@ -88,7 +88,7 @@ export default function AboutCarousel() {
     >
       <div className="max-w-5xl mx-auto  bg-black">
         <h2
-          className="text-4xl font-bold text-center mb-10
+          className="text-4xl font-bold text-center mb-10 p-5
                      bg-gradient-to-r from-blue-100 via-white-900 to-green-100
                      bg-clip-text text-transparent"
         >
@@ -97,7 +97,7 @@ export default function AboutCarousel() {
 
         {/* viewport */}
         <div
-          className=" bg-black overflow-hidden rounded-1xl ring-1 ring-white/10"
+          className="overflow-hidden rounded-1xl ring-1 ring-white/10"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
@@ -127,7 +127,7 @@ export default function AboutCarousel() {
         </div>
 
         {/* controls */}
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-6 p-3 flex items-center justify-between">
           <div className="flex gap-2">
             {slides.map((_, i) => (
               <button
