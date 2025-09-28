@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { fetchNewsAPI, fetchCurrentsAPI } from "../api/newsApi";
 
 const tabs = [
-  { id: "newsapi", label: "Tech News" },
-  { id: "currents", label: "Cyber Security" },
+  { id: "currents", label: "Tech News" },       // default & first
+  { id: "newsapi",  label: "Cyber Security" },
 ];
 
 const fadeUp = {
@@ -47,7 +47,7 @@ function Card({ article, i }) {
       whileHover={{ y: -4 }}
     >
       {isLink ? (
-        <a {...linkProps} className="block">
+        <a {...linkProps} className="block" aria-label={article?.title || "Open article"}>
           <CardInner img={img} host={host} article={article} desc={desc} />
         </a>
       ) : (
@@ -89,7 +89,7 @@ function CardInner({ img, host, article, desc }) {
           {article?.url && (
             <span className="inline-flex items-center gap-1 text-blue-300 text-sm group-hover:text-blue-200 transition-colors">
               Read More
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                 <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </span>
@@ -141,20 +141,26 @@ const COMETS = [
 ];
 
 const NewsFeed = () => {
+  const DEFAULT_SOURCE = "currents";
   const [articles, setArticles] = useState([]);
-  const [source, setSource] = useState("newsapi");
+  const [source, setSource] = useState(() => {
+    const saved = localStorage.getItem("newsSource");
+    return saved || DEFAULT_SOURCE;
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
+    localStorage.setItem("newsSource", source);
+  }, [source]);
 
+  useEffect(() => {
+    let isMounted = true;
     (async () => {
       setLoading(true);
       try {
         let data = [];
-        if (source === "newsapi") data = await fetchNewsAPI();
-        else if (source === "currents") data = await fetchCurrentsAPI();
-
+        if (source === "currents") data = await fetchCurrentsAPI();
+        else if (source === "newsapi") data = await fetchNewsAPI();
         if (isMounted) setArticles(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to load news:", err);
@@ -163,23 +169,17 @@ const NewsFeed = () => {
         if (isMounted) setLoading(false);
       }
     })();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [source]);
 
   return (
     <section className="relative isolate overflow-hidden py-20 sm:py-24 px-6 sm:px-8 bg-black">
-      {/* animated background (distinct palette + effects from Services) */}
+      {/* animated background */}
       <div className="absolute inset-0 -z-10">
-        {/* aurora wash */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-[#0b0f2a] to-[#1a1140]" />
-        {/* soft blobs */}
         <div className="absolute -top-28 -left-28 h-80 w-80 rounded-full blur-3xl bg-violet-500/20" />
         <div className="absolute -bottom-24 -right-24 h-80 w-80 rounded-full blur-3xl bg-blue-500/20" />
 
-        {/* parallax dual dot layers with drift */}
         <div
           className="pointer-events-none absolute inset-0 opacity-20 mix-blend-screen dot-drift-slow"
           style={{
@@ -199,18 +199,12 @@ const NewsFeed = () => {
           }}
         />
 
-        {/* comets (different direction than Services) */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           {COMETS.map((c, i) => (
             <span
               key={i}
               className="nf-comet"
-              style={{
-                top: c.top,
-                left: c.left,
-                animationDelay: c.delay,
-                animationDuration: c.dur,
-              }}
+              style={{ top: c.top, left: c.left, animationDelay: c.delay, animationDuration: c.dur }}
             >
               <i />
             </span>
@@ -225,13 +219,12 @@ const NewsFeed = () => {
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
         style={{
-          background:
-            "linear-gradient(90deg, #c084fc 0%, #60a5fa 50%, #a78bfa 100%)",
+          background: "linear-gradient(90deg, #c084fc 0%, #60a5fa 50%, #a78bfa 100%)",
           WebkitBackgroundClip: "text",
           WebkitTextFillColor: "transparent",
         }}
       >
-         Tech Trends
+        Tech Trends
       </motion.h2>
 
       {/* segmented control */}
@@ -246,12 +239,15 @@ const NewsFeed = () => {
                 className={`relative z-10 px-4 sm:px-5 py-2 text-sm sm:text-[0.95rem] font-medium transition-colors ${
                   active ? "text-black" : "text-white/80 hover:text-white"
                 }`}
+                aria-pressed={active}
+                type="button"
               >
                 {active && (
                   <motion.span
                     layoutId="nf-pill"
                     className="absolute inset-0 z-[-1] rounded-full bg-white shadow"
                     transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                    aria-hidden="true"
                   />
                 )}
                 {t.label}
@@ -274,11 +270,7 @@ const NewsFeed = () => {
           {loading ? (
             Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} i={i} />)
           ) : !articles || articles.length === 0 ? (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="col-span-full text-center text-white/70"
-            >
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center text-white/70">
               No news articles found.
             </motion.p>
           ) : (
@@ -289,7 +281,7 @@ const NewsFeed = () => {
         </motion.div>
       </AnimatePresence>
 
-      {/* Local CSS for dot drift + comets (distinct from Services) */}
+      {/* Local CSS for dot drift + comets */}
       <style>{`
         @keyframes nf-dot-drift-slow {
           0% { background-position: 0 0, 11px 11px; }

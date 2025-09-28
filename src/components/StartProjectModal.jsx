@@ -2,9 +2,9 @@
 import React, { useState } from "react";
 
 // Use env when available (Vite or CRA); fallback to localhost:5050 in dev
-
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5050";
-
+const API_BASE =
+  process.env.REACT_APP_API_BASE || // optional override
+  (window?.location?.origin?.includes('localhost') ? 'http://localhost:5050' : '');
 
 export default function StartProjectModal({ open, onClose, presetService }) {
   const [form, setForm] = useState({

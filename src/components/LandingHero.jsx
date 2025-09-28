@@ -90,7 +90,7 @@ export default function LandingHero({ onOpenStartProject }) {
           </div>
 
           {/* LEFT: persuasive copy - overlay on mobile */}
-          <div className="absolute lg:static z-10 bg-black/80 text-white p-6 sm:p-10  rounded-lg backdrop-blur-md w-full h-full lg:w-auto lg:h-auto flex flex-col justify-center">
+          <div className="absolute lg:static z-10 bg-black/80 text-white p-6 sm:p-10  rounded-lg backdrop-blur{ --tw-backdrop-blur: blur(4px);} w-full h-full lg:w-auto lg:h-auto flex flex-col justify-center">
             <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }}>
               <motion.p variants={fadeUp} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                 🚀 BlsunTech — deliver faster, safer, smarter

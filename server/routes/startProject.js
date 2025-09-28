@@ -5,16 +5,18 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
+import { getPool } from "../db.js";   // ← add this
 
 const router = express.Router();
 console.log("[router] startProject loaded");
 
-// ✅ resolve data folder relative to this file (server/routes/)
+// Resolve data path relative to this file
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
-const DATA_DIR   = path.join(__dirname, "..", "data");
+const DATA_DIR    = path.join(__dirname, "..", "data");
 const NDJSON_PATH = path.join(DATA_DIR, "intakes.ndjson");
 console.log("[intakes] path:", NDJSON_PATH);
+
 const required = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 
 // POST /api/start-project
@@ -31,7 +33,15 @@ router.post("/start-project", async (req, res) => {
       botcheck = "",
     } = req.body || {};
 
-    // Persist every submission (so you can view later)
+    // Honeypot
+    if (botcheck) return res.json({ ok: true });
+
+    // Validation
+    if (!required(name) || !required(email) || !required(service) || !required(message)) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Build record FIRST
     const record = {
       id: crypto.randomUUID(),
       ts: new Date().toISOString(),
@@ -44,59 +54,79 @@ router.post("/start-project", async (req, res) => {
       budget,
       timeline,
       message,
-      botcheck,
     };
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.appendFile(NDJSON_PATH, JSON.stringify(record) + "\n");
-    console.log("Intake saved:", { id: record.id, name: record.name, service: record.service });
 
-    // Honeypot
-    if (botcheck) return res.json({ ok: true });
-
-    // Basic validation
-    if (!required(name) || !required(email) || !required(service) || !required(message)) {
-      return res.status(400).json({ error: "Missing required fields" });
+    // Try DB insert (non-fatal)
+    try {
+      const pool = getPool();
+      if (pool) {
+        const sql = `
+          INSERT INTO intakes
+            (id, ts, name, email, company, service, budget, timeline, message, ip, ua)
+          VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+          record.id, record.ts, record.name, record.email,
+          record.company || null, record.service,
+          record.budget || null, record.timeline || null,
+          record.message, record.ip || null, record.ua || null,
+        ];
+        await pool.execute(sql, params);
+        console.log("[db] insert ok:", { id: record.id, name: record.name, service: record.service });
+      } else {
+        console.warn("[db] pool not available; skip DB insert");
+      }
+    } catch (dbErr) {
+      console.warn("[db] insert failed (non-fatal):", dbErr.message);
     }
 
-    // Kill-switch to disable email (set EMAIL_DISABLED=1 in .env)
+    // Best-effort file append (fallback)
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      await fs.appendFile(NDJSON_PATH, JSON.stringify(record) + "\n");
+      console.log("Intake saved (file):", { id: record.id, name: record.name, service: record.service });
+    } catch (e) {
+      console.warn("[intakes] append failed (non-fatal):", e?.code || e?.message);
+    }
+
+    // Email kill-switch
     if (process.env.EMAIL_DISABLED === "1") {
-        console.log("Email disabled: skipping send", { id: record.id });
-           return res.json({ ok: true, id: record.id, receivedAt: record.ts });
-        
+      console.log("Email disabled: skipping send", { id: record.id });
+      return res.json({ ok: true, id: record.id, receivedAt: record.ts });
     }
 
-    // Send email (configure SMTP in .env)
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_PORT === "465", // true for 465 (SSL), false for 587 (STARTTLS)
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-
+    // Optional email
     const to = process.env.INTAKE_TO;
     const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-    if (!to) {
-      console.warn("INTAKE_TO not set; skipping email send");
-      return res.json({ ok: true });
-    }
+    if (to && from) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_PORT === "465",
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      });
 
-    await transporter.sendMail({
-      from: `"BlsunTech Intake" <${from}>`,
-      to,
-      replyTo: email,
-      subject: `New Project: ${service} — ${name}`,
-      text: [
-        `Name: ${name}`,
-        `Email: ${email}`,
-        `Company: ${company || "-"}`,
-        `Service: ${service}`,
-        `Budget: ${budget || "-"}`,
-        `Timeline: ${timeline || "-"}`,
-        "",
-        "Brief:",
-        message,
-      ].join("\n"),
-    });
+      await transporter.sendMail({
+        from: `"BlsunTech Intake" <${from}>`,
+        to,
+        replyTo: email,
+        subject: `New Project: ${service} — ${name}`,
+        text: [
+          `Name: ${name}`,
+          `Email: ${email}`,
+          `Company: ${company || "-"}`,
+          `Service: ${service}`,
+          `Budget: ${budget || "-"}`,
+          `Timeline: ${timeline || "-"}`,
+          "",
+          "Brief:",
+          message,
+        ].join("\n"),
+      });
+    } else {
+      console.warn("INTAKE_TO/SMTP_FROM not set; skipping email send");
+    }
 
     res.json({ ok: true, id: record.id, receivedAt: record.ts });
   } catch (e) {
@@ -105,7 +135,7 @@ router.post("/start-project", async (req, res) => {
   }
 });
 
-// GET /api/intakes?limit=50  (requires x-admin-token header)
+// GET /api/intakes?limit=50 (admin)
 router.get("/intakes", async (req, res) => {
   try {
     const token = req.get("x-admin-token");

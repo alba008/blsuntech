@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/**.js":  { "runtime": "nodejs", "maxDuration": 10 },
+    "api/**.mjs": { "runtime": "nodejs", "maxDuration": 10 }
+  },
+  "devCommand": "react-scripts start",
+  "buildCommand": "react-scripts build"
+}
