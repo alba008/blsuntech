@@ -1,8 +1,10 @@
 // src/components/StartProjectModal.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
-// Use env when available (Vite or CRA); fallback to localhost:5050 in dev
-const API_BASE = process.env.REACT_APP_API_BASE || "";  // <— empty string
+// Always call the API with a relative path. In dev, CRA will proxy /api/*
+// to your local server (via package.json "proxy"). In prod (Vercel),
+// /api/* goes to your serverless functions.
+const API_BASE = ""; // leave empty on purpose
 
 export default function StartProjectModal({ open, onClose, presetService }) {
   const [form, setForm] = useState({
@@ -13,17 +15,27 @@ export default function StartProjectModal({ open, onClose, presetService }) {
     budget: "",
     timeline: "",
     message: "",
-    botcheck: "", // honeypot
+    botcheck: "", // honeypot (hidden)
   });
 
   const [status, setStatus] = useState({ sending: false, done: false, error: "" });
   const [serverInfo, setServerInfo] = useState(null); // { id, receivedAt }
+
+  // Keep "service" in sync when presetService changes (e.g., user clicked a CTA)
+  useEffect(() => {
+    if (open) {
+      setForm((f) => ({ ...f, service: presetService || f.service }));
+      setStatus({ sending: false, done: false, error: "" });
+      setServerInfo(null);
+    }
+  }, [presetService, open]);
 
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const submit = async (e) => {
     e.preventDefault();
     if (form.botcheck) return; // spam trap
+
     setStatus({ sending: true, done: false, error: "" });
     setServerInfo(null);
 
@@ -35,12 +47,8 @@ export default function StartProjectModal({ open, onClose, presetService }) {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg = data?.error || `Request failed (${res.status})`;
-        throw new Error(msg);
-      }
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
 
-      // Expecting { ok:true, id, receivedAt } from the server
       setServerInfo({
         id: data?.id || "N/A",
         receivedAt: data?.receivedAt || new Date().toISOString(),
@@ -52,13 +60,12 @@ export default function StartProjectModal({ open, onClose, presetService }) {
   };
 
   const copyRef = async () => {
-    if (serverInfo?.id) {
-      try {
-        await navigator.clipboard.writeText(serverInfo.id);
-        alert("Reference ID copied!");
-      } catch {
-        // noop
-      }
+    if (!serverInfo?.id) return;
+    try {
+      await navigator.clipboard.writeText(serverInfo.id);
+      alert("Reference ID copied!");
+    } catch {
+      // ignore
     }
   };
 
@@ -67,7 +74,11 @@ export default function StartProjectModal({ open, onClose, presetService }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <button
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close modal backdrop"
+      />
 
       {/* modal */}
       <div className="relative w-full max-w-2xl rounded-2xl p-[1px] bg-gradient-to-br from-emerald-400/40 via-cyan-400/40 to-indigo-400/40">
@@ -78,6 +89,7 @@ export default function StartProjectModal({ open, onClose, presetService }) {
               onClick={onClose}
               className="text-white/70 hover:text-white"
               aria-label="Close"
+              type="button"
             >
               ✕
             </button>
@@ -87,7 +99,9 @@ export default function StartProjectModal({ open, onClose, presetService }) {
             /* ✅ Success view shows server info */
             <div className="mt-6 space-y-4">
               <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-emerald-200">
-                <div className="font-semibold">Thank you, {form.name || "friend"}! 🎉</div>
+                <div className="font-semibold">
+                  Thank you, {form.name || "friend"}! 🎉
+                </div>
                 <div className="text-emerald-100/80">
                   We’ve received your brief for{" "}
                   <span className="font-medium">{form.service || "your project"}</span>.
@@ -95,7 +109,7 @@ export default function StartProjectModal({ open, onClose, presetService }) {
               </div>
 
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="text-white/70 text-sm mb-1">Reference ID</div>
+                <label className="text-white/70 text-sm mb-1 block">Reference ID</label>
                 <div className="flex items-center justify-between gap-3">
                   <code className="font-mono text-sm text-white break-all">
                     {serverInfo?.id}
@@ -103,6 +117,7 @@ export default function StartProjectModal({ open, onClose, presetService }) {
                   <button
                     onClick={copyRef}
                     className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20"
+                    type="button"
                   >
                     Copy
                   </button>
@@ -116,16 +131,18 @@ export default function StartProjectModal({ open, onClose, presetService }) {
                 <button
                   onClick={onClose}
                   className="rounded-full bg-white text-black px-5 py-2 font-medium hover:bg-slate-100"
+                  type="button"
                 >
                   Close
                 </button>
               </div>
             </div>
           ) : (
-            <form onSubmit={submit} className="mt-6 space-y-4">
+            <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
               {/* honeypot */}
               <input
                 type="text"
+                id="botcheck"
                 name="botcheck"
                 autoComplete="off"
                 className="hidden"
@@ -136,21 +153,29 @@ export default function StartProjectModal({ open, onClose, presetService }) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Name</label>
+                  <label htmlFor="name" className="block text-sm text-white/70 mb-1">
+                    Name
+                  </label>
                   <input
+                    id="name"
                     name="name"
                     required
+                    autoComplete="name"
                     value={form.name}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Email</label>
+                  <label htmlFor="email" className="block text-sm text-white/70 mb-1">
+                    Email
+                  </label>
                   <input
+                    id="email"
                     type="email"
                     name="email"
                     required
+                    autoComplete="email"
                     value={form.email}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
@@ -160,24 +185,33 @@ export default function StartProjectModal({ open, onClose, presetService }) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Company</label>
+                  <label htmlFor="company" className="block text-sm text-white/70 mb-1">
+                    Company
+                  </label>
                   <input
+                    id="company"
                     name="company"
+                    autoComplete="organization"
                     value={form.company}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Service</label>
+                  <label htmlFor="service" className="block text-sm text-white/70 mb-1">
+                    Service
+                  </label>
                   <select
+                    id="service"
                     name="service"
                     required
                     value={form.service}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
                   >
-                    <option value="" disabled>Select a service</option>
+                    <option value="" disabled>
+                      Select a service
+                    </option>
                     <option>Web & App Development</option>
                     <option>E-commerce & Payments</option>
                     <option>AI, Data & Analytics</option>
@@ -192,15 +226,20 @@ export default function StartProjectModal({ open, onClose, presetService }) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Budget</label>
+                  <label htmlFor="budget" className="block text-sm text-white/70 mb-1">
+                    Budget
+                  </label>
                   <select
+                    id="budget"
                     name="budget"
                     required
                     value={form.budget}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
                   >
-                    <option value="" disabled>Select budget</option>
+                    <option value="" disabled>
+                      Select budget
+                    </option>
                     <option>Under $5k</option>
                     <option>$5k – $15k</option>
                     <option>$15k – $40k</option>
@@ -208,15 +247,20 @@ export default function StartProjectModal({ open, onClose, presetService }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-white/70 mb-1">Timeline</label>
+                  <label htmlFor="timeline" className="block text-sm text-white/70 mb-1">
+                    Timeline
+                  </label>
                   <select
+                    id="timeline"
                     name="timeline"
                     required
                     value={form.timeline}
                     onChange={update}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-400/40"
                   >
-                    <option value="" disabled>Select timeline</option>
+                    <option value="" disabled>
+                      Select timeline
+                    </option>
                     <option>ASAP</option>
                     <option>2–4 weeks</option>
                     <option>1–3 months</option>
@@ -226,8 +270,11 @@ export default function StartProjectModal({ open, onClose, presetService }) {
               </div>
 
               <div>
-                <label className="block text-sm text-white/70 mb-1">Brief</label>
+                <label htmlFor="message" className="block text-sm text-white/70 mb-1">
+                  Brief
+                </label>
                 <textarea
+                  id="message"
                   name="message"
                   rows={4}
                   required
