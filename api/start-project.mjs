@@ -1,4 +1,4 @@
-import { insertIntake } from "./db.mjs";
+import { getDb } from "./db.mjs";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,44 +8,44 @@ export default async function handler(req, res) {
 
   try {
     const {
-      name="", email="", company="", service="", budget="", timeline="", message="", botcheck=""
+      name = "",
+      email = "",
+      company = "",
+      service = "",
+      budget = "",
+      timeline = "",
+      message = "",
+      botcheck = "",
     } = req.body || {};
 
-    if (botcheck) return res.status(200).json({ ok: true });
+    if (botcheck) return res.json({ ok: true });
+
     if (!name || !email || !service || !message) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const record = {
-      id: randomId(),
-      ts: new Date().toISOString(),
-      ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "",
-      ua: req.headers["user-agent"] || "",
+    const db = await getDb();
+    if (!db) {
+      // fallback so the UI still works if DB is unavailable
+      console.warn("[db] not available; skipping insert");
+      return res.json({ ok: true, id: tinyId(), receivedAt: new Date().toISOString() });
+    }
+
+    const doc = {
+      ts: new Date(),
       name, email, company, service, budget, timeline, message,
+      ua: req.headers["user-agent"] || null,
+      ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null,
     };
 
-    // Try DB insert (non-fatal if it fails)
-    try {
-      const out = await insertIntake(record);
-      if (!out.inserted) console.warn("[intake] skipped DB insert:", out.reason);
-    } catch (e) {
-      console.warn("[intake] DB insert failed:", e?.message);
-    }
-
-    // Optional: email disabled by default in cloud
-    if (process.env.EMAIL_DISABLED === "1") {
-      return res.status(200).json({ ok: true, id: record.id, receivedAt: record.ts });
-    }
-
-    // TODO: add Nodemailer here if you want real emails in cloud
-
-    return res.status(200).json({ ok: true, id: record.id, receivedAt: record.ts });
+    const { insertedId } = await db.collection("intakes").insertOne(doc);
+    return res.json({ ok: true, id: String(insertedId), receivedAt: new Date().toISOString() });
   } catch (e) {
     console.error("start-project error:", e);
     return res.status(500).json({ error: "Server error" });
   }
 }
 
-function randomId() {
+function tinyId() {
   return "id-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }

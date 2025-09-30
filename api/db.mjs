@@ -1,36 +1,25 @@
-// api/db.mjs
-import mysql from "mysql2/promise";
+import { MongoClient, ServerApiVersion } from "mongodb";
 
-let pool = null;
+let _client;
+let _db;
 
-export function getPool() {
-  if (pool) return pool;
+export async function getDb() {
+  if (_db) return _db;
 
-  const {
-    DB_HOST,
-    DB_USER,
-    DB_PASS,
-    DB_NAME,
-    DB_PORT = "3306",
-  } = process.env;
+  const uri = process.env.MONGODB_URI;
+  const name = process.env.MONGODB_DB || "blsuntech";
 
-  // If any required var is missing, skip creating a pool
-  if (!DB_HOST || !DB_USER || !DB_NAME) {
-    console.warn("[db] env vars missing; DB pool not created");
+  if (!uri) {
+    console.warn("[db] MONGODB_URI missing; DB disabled");
     return null;
   }
 
-  pool = mysql.createPool({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASS || undefined,
-    database: DB_NAME,
-    port: Number(DB_PORT || 3306),
-    waitForConnections: true,
-    connectionLimit: 5,
-    queueLimit: 0,
-    ssl: process.env.DB_SSL === "1" ? { rejectUnauthorized: false } : undefined,
+  _client = new MongoClient(uri, {
+    serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
   });
 
-  return pool;
+  await _client.connect();
+  _db = _client.db(name);
+  console.log("[db] connected to", name);
+  return _db;
 }

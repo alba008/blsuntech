@@ -4,8 +4,10 @@ import React, { useEffect, useState } from "react";
 // Always call the API with a relative path. In dev, CRA will proxy /api/*
 // to your local server (via package.json "proxy"). In prod (Vercel),
 // /api/* goes to your serverless functions.
-const API_BASE = ""; // leave empty on purpose
-
+ const API_BASE =
+   typeof process !== "undefined" && process.env?.REACT_APP_API_BASE
+     ? process.env.REACT_APP_API_BASE
+  : ""; // empty = same origin, e.g. https://blsuntech.vercel.app
 export default function StartProjectModal({ open, onClose, presetService }) {
   const [form, setForm] = useState({
     name: "",

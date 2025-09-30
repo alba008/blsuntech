@@ -1,7 +1,5 @@
 {
-  "devCommand": "react-scripts start",
+  "framework": "create-react-app",
   "buildCommand": "react-scripts build",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.js" }
-  ]
+  "devCommand": "react-scripts start"
 }
